@@ -5,6 +5,4 @@ This repository contains computational workflows associated with a research proj
 ### Author 
 
 _**Depro Das**_ <br/> 
-*3D-Brain Models Lab <br/> 
-Department of Neurosurgery, University Medical Center Freiburg <br/> 
-Email: depro.das@uniklinik-freiburg.de* 
+*Email: depro.das@uniklinik-freiburg.de* 
