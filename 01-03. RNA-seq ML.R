@@ -1,5 +1,3 @@
-setwd("~/Desktop/Research Projects (3DBM)/01. Low-grade glioma/1. Low-grade glioma (Hypoxia)/2. Analysis/1-1. Analysis (TCGA Bulk RNA-seq)/01-03. ML markers") 
-
 # Author : Depro Das, Department of Neurosurgery, University Hospital Freiburg, Freiburg, Germany 
 
 # ── Libraries ───────────────────────────────────────────────────────────────── 
