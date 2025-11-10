@@ -1,4 +1,4 @@
-# Author : Depro Das, Department of Neurosurgery, University Hospital Freiburg, Freibung, Germany 
+# Author : Depro Das, Department of Neurosurgery, University Hospital Freiburg, Freiburg, Germany 
 
 # ── Libraries ───────────────────────────────────────────────────────────────── 
 
