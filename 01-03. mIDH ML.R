@@ -10,7 +10,8 @@ library(randomForest)
 library(xgboost)
 library(e1071) 
 library(glmnet) 
-library(pROC) 
+library(pROC)
+library(ggrepel)
 
 # ── Prepare data ────────────────────────────────────────────────────────────── 
 
@@ -126,6 +127,28 @@ p.ml_bar <- ggplot(cons.df_mk, aes(x = consensus_prob, y = genes, color = Subtyp
 p.ml_bar 
 ggsave(filename = "01. Marker probability.pdf", plot = p.ml_bar, width = 10, height = 6, units = "in")
 
+# Zoom-in 
+
+label_genes <- cons.df_mk %>%
+  filter(consensus_prob >= 0.25 & consensus_prob <= 0.5) %>%
+  arrange(desc(consensus_prob)) %>%
+  slice_head(n = 10)
+
+p.zm_bar <- ggplot(cons.df_mk, aes(x = consensus_prob, y = genes, color = Subtype)) +
+  geom_point(size = 1, alpha = 0.7) +
+  geom_text_repel(data = label_genes, aes(label = genes), size = 2.5, max.overlaps = Inf, box.padding = 0.3, point.padding = 0.2, segment.size = 0.2) +
+  coord_flip() +
+  scale_y_discrete(limits = rev) + 
+  xlim(0.25, 0.5) +
+  theme_bw(base_size = 10) + 
+  theme(axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+p.zm_bar
+ggsave(filename = "02. Marker probability zoom.pdf", plot = p.zm_bar, width = 10, height = 6, units = "in")
+
+
 # ── ROC curve ───────────────────────────────────────────────────────────────── 
 
 roc_rnf <- roc(y_tests, predict(rnf_model, X_tests, type = "prob")[,2])
@@ -152,4 +175,4 @@ p_roc <- ggplot(roc_df, aes(x = FPR, y = TPR, color = Model)) +
   theme_bw() +
   theme(legend.position = "bottom")
 p_roc 
-ggsave(filename = "02. ROC curve.pdf", plot = p_roc, width = 6, height = 6, units = "in")
+ggsave(filename = "03. ROC curve.pdf", plot = p_roc, width = 6, height = 6, units = "in")
