@@ -125,7 +125,7 @@ silh.filter <- 0.35
 top_gene_list <- list()
 basis_vectors <- list()
 
-extract_elements <- function(nmf_res, sample_name, top_n = 50) {
+extract_elements <- function(nmf_res, sample_name, top_n = top_n) {
   if (!"measures" %in% names(nmf_res)) {
     stop(paste("NMF object for", sample_name, "contains no 'measures' slot"))
   }
