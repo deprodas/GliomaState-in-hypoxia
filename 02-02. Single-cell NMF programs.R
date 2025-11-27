@@ -227,7 +227,7 @@ top_genes_per_cluster <- list()
 
 for (clust_id in names(program_cluster_list)) {
   progs <- program_cluster_list[[clust_id]] 
-  mat <- do.call(cbind, basis_vectors[progs]) # subset basis vectors (genes × programs) 
+  mat <- do.call(cbind, basis_vectors[progs]) # subset basis vectors 
   avg_vec <- rowMeans(mat) 
   top_genes <- names(sort(avg_vec, decreasing = TRUE))[1:top_n]
   top_genes_per_cluster[[paste0("MetaProg", clust_id)]] <- top_genes
