@@ -1,3 +1,5 @@
+setwd("~/Desktop/Research Projects (3DBM)/01. Low-grade glioma/1. Low-grade glioma (Hypoxia)/2. Analysis/1-1. Analysis (TCGA Bulk RNA-seq)/01-03. ML markers") 
+
 # Author : Depro Das, Department of Neurosurgery, University Hospital Freiburg, Freiburg, Germany 
 
 # ── Libraries ───────────────────────────────────────────────────────────────── 
@@ -146,7 +148,7 @@ p.zm_bar <- ggplot(cons.df_mk, aes(x = consensus_prob, y = genes, color = Subtyp
         panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank())
 p.zm_bar
-ggsave(filename = "02. Marker probability zoom.pdf", plot = p.zm_bar, width = 10, height = 6, units = "in")
+ggsave(filename = "01. Marker probability zoom.pdf", plot = p.zm_bar, width = 10, height = 6, units = "in")
 
 
 # ── ROC curve ───────────────────────────────────────────────────────────────── 
