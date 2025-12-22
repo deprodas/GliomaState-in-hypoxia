@@ -19,7 +19,7 @@ library(BiocGenerics)
 sc_object <- readRDS("mIDH (CCA integrated Seurat 4.3.0).RDS") 
 sc_glioma <- subset(sc_object, subset = immunecells == "Glioma") 
 
-# Remove smaller ones and merge if they exist
+# Remove smaller ones and merge if they exist 
 
 DefaultAssay(sc_glioma) <- "RNA"
 
