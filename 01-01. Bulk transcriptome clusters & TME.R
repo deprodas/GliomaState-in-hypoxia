@@ -85,13 +85,10 @@ univ_df <- map_dfr(gene_present, ~ {
 })
 
 str(univ_df)
-
-# write.csv(univ_df, "Result cox (all hypoxia genes).csv", row.names = FALSE)
-write.xlsx(univ_df, file = "Result cox (all hypoxia genes).xlsx", rowNames = FALSE)
+write.csv(univ_df, "Result cox (all hypoxia genes).csv", row.names = FALSE)
 
 sig_hpx.genes <- univ_df %>% filter(p.value < 0.05) %>% arrange(p.value) 
-# write.csv(sig_hpx.genes, "Result cox (significant hypoxia genes).csv", row.names = FALSE)
-
+write.csv(sig_hpx.genes, "Result cox (significant hypoxia genes).csv", row.names = FALSE)
 
 # ── Run NMF ─────────────────────────────────────────────────────────────────── 
 
@@ -333,7 +330,6 @@ pie.hpx_com <- (pie.hpx_gend + pie.hpx_grad) / (pie.hpx_subt + pie.hpx_path)
 pie.hpx_com 
 ggsave(pie.hpx_com, file = "05. Hypoxia group metapie.pdf", width = 8, height = 6, units = "in")
 
-
 # ── Confirmatory enrichment ───────────────────────────────────────────────────  
 
 # Prepare inputs 
@@ -473,7 +469,6 @@ p.cor.hpx <- ggplot(cor_pgg, aes(x = Our_features, y = Metamodules, fill = Corre
 p.cor.hpx 
 ggsave(file = "7. Metaprograms correlation.pdf", plot = p.cor.hpx, width = 4, height = 2.5, units = "in") 
 
-
 # ── Survival analysis ───────────────────────────────────────────────────────── 
 
 str(metadata)
@@ -526,7 +521,6 @@ kmp.surv.pat <- ggsurvplot_facet(fit.surv_pat,
 kmp.surv.pat 
 ggsave(file = "8. Survival hypoxia groups (pathology).pdf", plot = kmp.surv.pat, width = 8, height = 4, units = "in") 
 
-
 # ── ESTIMATE ────────────────────────────────────────────────────────────────── 
 
 estim_score <- counts.normz |> 
@@ -556,7 +550,6 @@ vln_estim <- ggplot(meta_estim.long, aes(x = hypoxia_class, y = scores, fill = h
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) 
 vln_estim
 ggsave(filename = "9. Estimate hypoxia groups violin.pdf", plot = vln_estim, width = 6, height = 3, units = c("in")) 
-
 
 # ── Immune checkpoint gene expression (ICGs) ────────────────────────────────── 
 
