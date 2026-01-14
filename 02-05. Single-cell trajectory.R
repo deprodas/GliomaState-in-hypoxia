@@ -1,5 +1,3 @@
-setwd("C:\\01. Research\\01. mIDH (Hypoxia)\\02. Analysis\\02-01. scRNA-seq (Tirosh)\\05. Trajectory & cell-cycle")
-
 # Author : Depro Das, Department of Neurosurgery, University Medical Center Freiburg
 
 # ── Libraries ───────────────────────────────────────────────────────────────── 
