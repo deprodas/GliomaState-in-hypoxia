@@ -1,6 +1,8 @@
 ## Understanding hypoxia-associated transcriptional plasticity in IDH-mutant gliomas 
 
-This repository contains computational workflows investigating hypoxia-associated transcriptional programs in IDH-mutant brain tumors. It is currently undergoing revision, including updates to bulk, single-cell, and co-culture analysis workflows. Updated codes will be made available upon completion of the revisions.
+Computational workflows supporting the analysis of hypoxia-associated transcriptional programs in IDH-mutant gliomas, integrating bulk, single-cell, co-culture, and spatial transcriptomics data. 
+
+**Status:** This repository is currently under active revision. Finalized scripts will be updated upon completion. 
 
 **Abstract:** https://doi.org/10.1093/neuonc/noaf193.149
 
