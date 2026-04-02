@@ -1,4 +1,4 @@
-# Author : Depro Das, Department of Neurosurgery, University Hospital Freiburg, Freiburg, Germany 
+# Author : Depro Das, 3DBM Lab, Department of Neurosurgery, University Medical Center Freiburg, Freiburg, Germany
 
 # ── Libraries ───────────────────────────────────────────────────────────────── 
 
@@ -60,7 +60,6 @@ hpx_gene <- read.delim("HALLMARK_HYPOXIA.v2025.1.Hs.tsv", header = TRUE, sep = "
 hpx_gene <- hpx_gene %>% filter(STANDARD_NAME %in% "GENE_SYMBOLS")
 hpx_gene <- unlist(strsplit(hpx_gene$HALLMARK_HYPOXIA, ","))
 hpx_gene <- data.frame(hypoxia_genes = hpx_gene, stringsAsFactors = FALSE)
-
 
 # ── Run cox regression ──────────────────────────────────────────────────────── 
 
@@ -287,6 +286,7 @@ write.csv(metadata, file = "IDHm_metadata.csv", row.names = TRUE)
 # ── Metadata distribution ───────────────────────────────────────────────────── 
 
 metadata <- read.csv("IDHm_metadata.csv", row.names = 1)
+metadata$SUBTYPE_GRADE <- interaction(metadata$SUBTYPE, metadata$GRADE)
 metadata %>% dplyr::count(hypoxia_class) 
 metadata %>% dplyr::count(hypoxia_groups) 
 
@@ -330,6 +330,7 @@ pie.hpx_com <- (pie.hpx_gend + pie.hpx_grad) / (pie.hpx_subt + pie.hpx_path)
 pie.hpx_com 
 ggsave(pie.hpx_com, file = "05. Hypoxia group metapie.pdf", width = 8, height = 6, units = "in")
 
+
 # ── Confirmatory enrichment ───────────────────────────────────────────────────  
 
 # Prepare inputs 
@@ -347,9 +348,14 @@ counts.normz <- counts.normz %>%
 
 lgg.sub <- openxlsx::read.xlsx("IDHm metamodule genes.xlsx")
 colnames(lgg.sub) 
-lgg.sub <- lgg.sub %>% dplyr::select(c(OD_OPC_like, OD_Astro_like, OD_Cycling, OD_RA, OD_RA_Curated, Hypoxia_cox, Hypoxia_all)) 
-lgg.sub <- lgg.sub %>% pivot_longer(c(OD_OPC_like, OD_Astro_like, OD_Cycling, OD_RA, OD_RA_Curated, Hypoxia_cox, Hypoxia_all), names_to = "source", values_to = "target")
+lgg.sub <- lgg.sub %>% dplyr::select(c(MetaProg1_AC, MetaProg2_OPC, MetaProg3_NPC, MetaProg4_Cycling, Hypoxia_cox)) 
+lgg.sub <- lgg.sub %>% pivot_longer(c(MetaProg1_AC, MetaProg2_OPC, MetaProg3_NPC, MetaProg4_Cycling, Hypoxia_cox), names_to = "source", values_to = "target")
 lgg.sub <- lgg.sub %>% mutate(weight = 1) %>% filter(target != " ") %>% filter(target != "") 
+
+duplicated_genes <- lgg.sub$target[duplicated(lgg.sub$target)]
+duplicated_genes
+
+lgg.sub <- lgg.sub[!duplicated(lgg.sub[, c("source", "target")]), ]
 
 # Run GSEA ("gsva", "plage", "ssgsea", "zscore") 
 
@@ -357,8 +363,8 @@ res_ssgsea <- decoupleR::run_gsva(mat = counts.normz,
                                   network = lgg.sub, 
                                   .source ='source', 
                                   .target ='target', 
-                                  minsize = 2L, 
-                                  method = c("zscore")) 
+                                  minsize = 5L, 
+                                  method = c("ssgsea")) 
 
 res_long <- res_ssgsea %>% 
   pivot_wider(id_cols = 'source', names_from = 'condition', values_from = 'score') %>%
@@ -369,7 +375,7 @@ res_long <- res_ssgsea %>%
 
 # Confirm hypoxia and its distribution 
 
-res_hpx_only <- res_long[2] 
+res_hpx_only <- res_long['Hypoxia_cox']
 
 sampleAnnCol2 <- metadata[, c("SUBTYPE", "CANCER_TYPE_DETAILED", "GRADE")] 
 
@@ -393,23 +399,25 @@ ggsave(ht.hpx, filename = "6. Heatmap hypoxia.pdf", width = 8, height = 2, units
 # Rename the groups 
 
 metadata <- metadata %>% mutate(hypoxia_class = ifelse(hypoxia_groups %in% "C1", "Mild_hypoxia", "Severe_hypoxia"))
-write.csv(metadata, file = "IDHm_metadata.csv", row.names = TRUE)
 
-# Metaprogram distribution 
 
-res_ssgsea <- res_ssgsea %>% mutate(hypoxia_class = metadata[condition, "hypoxia_class"])
+# ── Association with MPs ──────────────────────────────────────────────────────   
 
-p.box <- ggplot(res_ssgsea, aes(x = source, y = score, fill = hypoxia_class)) +
+# Distribution 
+
+res_ssgsea <- res_ssgsea %>% mutate(SUBTYPE_GRADE = metadata[condition, "SUBTYPE_GRADE"])
+
+p.box <- ggplot(res_ssgsea, aes(x = source, y = score, fill = SUBTYPE_GRADE)) +
   geom_boxplot() +
   scale_fill_brewer(palette = "RdBu") + 
   stat_compare_means(method = "t.test", label = "p.signif") + 
   theme_bw() + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) 
 p.box
-ggsave(p.box, filename = "7. Metaprograms boxplot.pdf", width = 4, height = 5, units = c("in")) 
+ggsave(p.box, filename = "7. Metaprograms boxplot.pdf", width = 4, height = 5, units = c("in"))
 
 
-# Metaprogram correlation 
+# Enrichment 
 
 set.seed(123) 
 ht.subtype <- Heatmap(as.matrix(t(res_long)), 
@@ -422,64 +430,64 @@ ht.subtype <- Heatmap(as.matrix(t(res_long)),
                       border = TRUE) 
 ht.subtype <- as.ggplot(ht.subtype) 
 ht.subtype 
-ggsave(ht.subtype, filename = "7. Metaprograms heatmap.pdf", width = 8, height = 4, units = c("in"))
+# ggsave(ht.subtype, filename = "7. Metaprograms heatmap.pdf", width = 8, height = 4, units = c("in"))
+
+# Enrichment - average (4 groups)
+
+enrich_df <- cbind(res_long, metadata) 
+
+enrich_mp <- enrich_df %>%
+  select(SAMPLE_ID, SUBTYPE_GRADE, hypoxia_class, MetaProg1_AC, MetaProg2_OPC, MetaProg3_NPC, MetaProg4_Cycling) %>%
+  pivot_longer(cols = starts_with("MetaProg"), names_to = "Metaprogram", values_to = "Enrichment")
+
+mps_summm <- enrich_mp %>%
+  group_by(SUBTYPE_GRADE, hypoxia_class, Metaprogram) %>%
+  summarise(Enrichment = mean(Enrichment, na.rm = TRUE), .groups = "drop")
+
+mps_summm <- na.omit(mps_summm)
+
+p.enr.dot <- ggplot(mps_summm, aes(x = hypoxia_class, y = Metaprogram, fill = Enrichment)) +
+  geom_point(aes(size = abs(Enrichment)), shape = 21, color = "black") +
+  scale_fill_gradient2(low = "darkblue", mid = "white", high = "red", midpoint = 0) +
+  facet_wrap(~ SUBTYPE_GRADE, nrow = 1) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) 
+p.enr.dot
+ggsave(p.enr.dot, filename = "7. Metaprograms dotplot.pdf", width = 6, height = 3, units = c("in"))
 
 
-# Correlation between hypoxia and metaprograms 
+# Correlation between hypoxia and metaprograms (4 groups) 
 
-enrich_df <- res_long 
+enrich_df <- cbind(res_long, metadata) 
 
-c1.mh <- metadata %>% dplyr::filter(hypoxia_class == "Mild_hypoxia")
-c2.sh <- metadata %>% dplyr::filter(hypoxia_class == "Severe_hypoxia")
+cor_subdf <- enrich_df %>%
+  pivot_longer(cols = starts_with("MetaProg"), names_to = "Metaprogram", values_to = "Metaprogram_value") %>%
+  group_by(SUBTYPE_GRADE, hypoxia_class, Metaprogram) %>%
+  summarise(Correlation = cor(Metaprogram_value, Hypoxia_cox, method = "pearson"), .groups = "drop")
 
-res_corr_c1.mh <- enrich_df %>% 
-  dplyr::filter(rownames(.) %in% rownames(c1.mh)) %>% 
-  dplyr::select(OD_OPC_like, OD_Astro_like, OD_Cycling, OD_RA_Curated, Hypoxia_all) 
+cor_subdf <- na.omit(cor_subdf)
 
-res_corr_c2.sh <- enrich_df %>% 
-  dplyr::filter(rownames(.) %in% rownames(c2.sh)) %>% 
-  dplyr::select(OD_OPC_like, OD_Astro_like, OD_Cycling, OD_RA_Curated, Hypoxia_all) 
+p.cor.dot <- ggplot(cor_subdf, aes(x = hypoxia_class, y = Metaprogram, fill = Correlation)) +
+  geom_point(aes(size = abs(Correlation)), shape = 21, color = "black") +
+  scale_fill_gradient2(low = "darkblue", mid = "white", high = "red", midpoint = 0, limits = c(-0.67, 0.67)) +
+  facet_wrap(~ SUBTYPE_GRADE, nrow = 1) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) 
+p.cor.dot
+ggsave(file = "7. Metaprograms correlation (4 categories).pdf", plot = p.cor.dot, width = 6, height = 3, units = "in") 
 
-cor_c1.mh <- cor(res_corr_c1.mh, method = "pearson") 
-cor_c2.sh <- cor(res_corr_c2.sh, method = "pearson") 
+# ── Survival and cox analysis ───────────────────────────────────────────────── 
 
-cor_new_c1.mh <- cor_c1.mh %>% 
-  as.data.frame() %>% 
-  dplyr::filter(rownames(.) %in% c("OD_Astro_like", "OD_OPC_like", "OD_Cycling", "OD_RA_Curated")) %>% 
-  dplyr::select(Hypoxia_all) %>% 
-  rename(C1_MH = "Hypoxia_all") 
+metasurv <- cbind(res_hpx_only, metadata)
+metasurv <- metasurv[complete.cases(metasurv[, c('OS_MONTHS', 'OS_STATUS', 'hypoxia_class', 'SUBTYPE_GRADE')]), ]
 
-cor_new_c2.sh <- cor_c2.sh %>% 
-  as.data.frame() %>% 
-  dplyr::filter(rownames(.) %in% c("OD_Astro_like", "OD_OPC_like", "OD_Cycling", "OD_RA_Curated")) %>% 
-  dplyr::select(Hypoxia_all) %>% 
-  rename(C2_SH = "Hypoxia_all") 
+# Univariate survival / overall
 
-cor_new <- cbind(cor_new_c1.mh, cor_new_c2.sh)
-cor_pgg <- cor_new %>% 
-  rownames_to_column(var = "Metamodules") %>% 
-  pivot_longer(cols = !c("Metamodules"), names_to = 'Our_features', values_to = 'Correlation')
-
-p.cor.hpx <- ggplot(cor_pgg, aes(x = Our_features, y = Metamodules, fill = Correlation)) + 
-  geom_point(aes(size = Correlation), alpha = 1, shape = 21) + 
-  scale_fill_gradient2(low = "darkblue", mid = "white", high = "red", midpoint = 0, limits = c(-0.4, 0.4)) + 
-  theme_bw() + 
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) + 
-  coord_flip() 
-p.cor.hpx 
-ggsave(file = "7. Metaprograms correlation.pdf", plot = p.cor.hpx, width = 4, height = 2.5, units = "in") 
-
-# ── Survival analysis ───────────────────────────────────────────────────────── 
-
-str(metadata)
-
-# Build and fit survival : overall 
-
-surv.obj_hpx <- Surv(time = metadata$OS_MONTHS, event = metadata$OS_STATUS)
-fit.surv_hpx <- survfit(surv.obj_hpx ~ hypoxia_class, data = metadata)
+surv.obj_hpx <- Surv(time = metasurv$OS_MONTHS, event = metasurv$OS_STATUS)
+fit.surv_hpx <- survfit(surv.obj_hpx ~ hypoxia_class, data = metasurv)
 
 kmp.surv.hpx <- ggsurvplot(fit.surv_hpx, 
-                           data = metadata, 
+                           data = metasurv, 
                            surv.median.line = "hv", 
                            size = 1.0,
                            censor.size = 0, 
@@ -492,64 +500,96 @@ kmp.surv.hpx <- kmp.surv.hpx$plot
 kmp.surv.hpx 
 ggsave(file = "8. Survival hypoxia groups (total).pdf", plot = kmp.surv.hpx, width = 3.55, height = 4, units = "in") 
 
-# Build and fit survival : split by IDH-status 
+# Split by pathology 
 
-fit.surv_idh <- survfit(surv.obj_hpx ~ hypoxia_class + SUBTYPE, data = metadata)
-
-kmp.surv.idh <- ggsurvplot_facet(fit.surv_idh,
+fit.surv_pat <- survfit(Surv(OS_MONTHS, OS_STATUS) ~ hypoxia_class, data = metasurv)
+kmp.surv.pat <- ggsurvplot_facet(fit.surv_pat,
                                  data = metadata, 
                                  facet.by = "SUBTYPE", 
                                  surv.median.line = "hv", 
+                                 pval = TRUE,
                                  size = 1.0,
-                                 censor.size = 0, 
-                                 palette = c("blue", "red")) 
-kmp.surv.idh 
-ggsave(file = "8. Survival hypoxia groups (IDH-status).pdf", plot = kmp.surv.idh, width = 8, height = 4, units = "in") 
-
-
-# Build and fit survival : split by pathology  
-
-fit.surv_pat <- survfit(surv.obj_hpx ~ hypoxia_class + CANCER_TYPE_DETAILED, data = metadata)
-
-kmp.surv.pat <- ggsurvplot_facet(fit.surv_pat,
-                                 data = metadata, 
-                                 facet.by = "CANCER_TYPE_DETAILED", 
-                                 surv.median.line = "hv", 
-                                 size = 1.0,
-                                 censor.size = 0, 
-                                 palette = c("blue", "red")) 
+                                 censor.size = 0) 
 kmp.surv.pat 
 ggsave(file = "8. Survival hypoxia groups (pathology).pdf", plot = kmp.surv.pat, width = 8, height = 4, units = "in") 
 
+# Split by grade 
+
+fit.surv_grd <- survfit(Surv(OS_MONTHS, OS_STATUS) ~ hypoxia_class, data = metasurv)
+kmp.surv.grd <- ggsurvplot_facet(fit.surv_grd,
+                                 data = metadata, 
+                                 facet.by = "GRADE", 
+                                 surv.median.line = "hv", 
+                                 pval = TRUE,
+                                 size = 1.0,
+                                 censor.size = 0) 
+kmp.surv.grd 
+ggsave(file = "8. Survival hypoxia groups (grade).pdf", plot = kmp.surv.grd, width = 8, height = 4, units = "in") 
+
+# Split by hypoxia groups for pathology and grade (4 groups)
+
+fit.surv_hpg <- survfit(Surv(OS_MONTHS, OS_STATUS) ~ SUBTYPE_GRADE, data = metasurv)
+kmp.surv.hpg <- ggsurvplot_facet(fit.surv_hpg,
+                                 data = metasurv,
+                                 facet.by = "hypoxia_class",
+                                 surv.median.line = "hv",
+                                 pval = TRUE,
+                                 size = 1,
+                                 censor.size = 0) 
+kmp.surv.hpg 
+ggsave(file = "8. Survival hypoxia groups (hypoxia in pathology & grade).pdf", plot = kmp.surv.hpg, width = 8, height = 4, units = "in") 
+
+# Split by pathology and grade (4 groups) for hypoxia groups 
+
+fit.surv_ptg <- survfit(Surv(OS_MONTHS, OS_STATUS) ~ hypoxia_class, data = metasurv)
+kmp.surv.ptg <- ggsurvplot_facet(fit.surv_ptg,
+                                 data = metadata, 
+                                 facet.by = "SUBTYPE_GRADE", 
+                                 surv.median.line = "hv", 
+                                 pval = TRUE, 
+                                 size = 1.0,
+                                 censor.size = 0, 
+                                 nrow = 1) 
+kmp.surv.ptg 
+ggsave(file = "8. Survival hypoxia groups (pathology & grade in hypoxia).pdf", plot = kmp.surv.ptg, width = 12, height = 4, units = "in") 
+
+# Multivariable cox regression (interaction tests to prove irrespective statistically)
+
+surv.obj_hpx <- Surv(time = metasurv$OS_MONTHS, event = metasurv$OS_STATUS)
+
+cox_int <- coxph(surv.obj_hpx ~ hypoxia_class * GRADE + hypoxia_class * SUBTYPE, data = metasurv)
+for_int <- ggforest(cox_int, data = metasurv)
+ggsave(file = "8. Cox regression.pdf", plot = for_int, width = 6, height = 2.5, units = "in") 
+
+
 # ── ESTIMATE ────────────────────────────────────────────────────────────────── 
 
-estim_score <- counts.normz |> 
+estim_score <- counts.normz %>% 
   filter_common_genes(id = "hgnc_symbol", tell_missing = FALSE, find_alias = TRUE) |> 
   estimate_score(is_affymetrix = TRUE)  
 
 write.csv(estim_score, "Result ESTIMATE scores.csv")
 
-estim_score |> 
+estim_score %>% 
   plot_purity(is_affymetrix = TRUE) 
 
 estim_score <- estim_score %>% as.data.frame() %>% column_to_rownames(var = "sample") 
-meta_estim <- merge(estim_score, metadata %>% select(hypoxia_class), by = 0, all = TRUE) 
-
-meta_estim.long <- meta_estim %>% 
+meta_estimm <- cbind(estim_score, metadata %>% select(SUBTYPE_GRADE, hypoxia_class)) 
+estimm_long <- meta_estimm %>% 
   as.data.frame() %>% 
-  pivot_longer(cols = !c(Row.names, hypoxia_class), names_to = "estimate_pram", values_to = "scores")
+  pivot_longer(cols = !c(hypoxia_class, SUBTYPE_GRADE), names_to = "estimate_pram", values_to = "scores") %>% 
+  na.omit()
 
-# Violin plot 
+# Box plot 
 
-vln_estim <- ggplot(meta_estim.long, aes(x = hypoxia_class, y = scores, fill = hypoxia_class)) +
-  geom_violin(trim = FALSE, alpha = 1, draw_quantiles = c(0.5), position = position_dodge(1)) + 
-  scale_fill_manual(values = c("#F05960", "#77C252")) + 
-  stat_compare_means(method = "t.test") + 
+box_estim <- ggplot(estimm_long, aes(x = hypoxia_class, y = scores, fill = SUBTYPE_GRADE)) +
+  geom_boxplot(position = position_dodge(0.8), outlier.shape = NA) + 
   facet_wrap(~estimate_pram, nrow = 1, scale = "free") + 
   theme_bw() + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) 
-vln_estim
-ggsave(filename = "9. Estimate hypoxia groups violin.pdf", plot = vln_estim, width = 6, height = 3, units = c("in")) 
+box_estim
+ggsave(filename = "9. Estimate hypoxia groups bar (4 class).pdf", plot = box_estim, width = 8, height = 3, units = c("in")) 
+
 
 # ── Immune checkpoint gene expression (ICGs) ────────────────────────────────── 
 
@@ -559,20 +599,20 @@ icg_vec <- c("CCR5", "CD274", "CTLA4", "CXCR3", "HAVCR2", "LAG3", "PDCD1", "PDCD
 
 counts.icg <- counts.normz %>% as.data.frame() %>% dplyr::filter(rownames(.) %in% icg_vec)
 counts.icg <- t(counts.icg) 
-counts.icg <- merge(counts.icg, metadata %>% select(hypoxia_class), by = 0, all = TRUE)
+counts.icg <- cbind(counts.icg, metadata %>% select(hypoxia_class, SUBTYPE_GRADE))
 
 counts.icg.long <- counts.icg %>% 
   as.data.frame() %>% 
-  pivot_longer(cols = !c(Row.names, hypoxia_class), names_to = "ICGs", values_to = "normalized_expression")
+  pivot_longer(cols = !c(hypoxia_class, SUBTYPE_GRADE), names_to = "ICGs", values_to = "normalized_expression") %>% 
+  na.omit()
 
-# Violin plot 
+# Box plot 
 
-vln.icg <- ggplot(counts.icg.long, aes(x = hypoxia_class, y = normalized_expression, fill = hypoxia_class)) +
-  geom_violin(trim = TRUE, alpha = 1, draw_quantiles = c(0.5), position = position_dodge(1)) + 
-  scale_fill_manual(values = c("#F05960", "#77C252")) + 
-  stat_compare_means(method = "t.test") + 
+box_icg <- ggplot(counts.icg.long, aes(x = hypoxia_class, y = normalized_expression, fill = SUBTYPE_GRADE)) +
+  geom_boxplot(position = position_dodge(0.8), outlier.shape = NA) + 
   facet_wrap(~ICGs, nrow = 1) + 
   theme_bw() + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) 
-vln.icg
-ggsave(filename = "10. ICG hypoxia groups violin.pdf", plot = vln.icg, width = 8, height = 3, units = c("in")) 
+box_icg
+ggsave(filename = "10. ICG hypoxia groups box (4 class).pdf", plot = box_icg, width = 10, height = 4, units = c("in")) 
+
