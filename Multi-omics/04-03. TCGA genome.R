@@ -1,4 +1,6 @@
-# Author : Depro Das, 3DBM Lab, Department of Neurosurgery, University Medical Center Freiburg, Freiburg, Germany
+setwd("C:\\01. Research\\01. mIDH (hypoxia)\\02. Analysis\\01. Analysis (cBioportal)\\01-05. Mutation")
+
+# Author : Depro Das, Medical Center - University of Freiburg
 
 # ── Libraries ───────────────────────────────────────────────────────────────── 
 
@@ -11,7 +13,8 @@ library(ggplot2)
 library(ggpubr) 
 library(patchwork) 
 library(viridis) 
-library(maftools)
+library(survival)
+library(survminer)
 
 # ── Data input and classification (mutational) ──────────────────────────────── 
 
@@ -133,6 +136,7 @@ p.dmg <- ggplot(top_diffdf, aes(x = reorder(Hugo_Symbol, freq_diff), y = freq_di
 p.dmg 
 ggsave(p.dmg, file = "07. DMG barplot.pdf", width = 4, height = 4, units = "in")
 
+
 # Co-barplots - two groups 
 
 genes_ord <- as.character(top_diffdf$Hugo_Symbol)
@@ -166,6 +170,7 @@ f.dmg <- ggplot(sh.mh_top, aes(x = Hugo_Symbol, y = or, ymin = ci.low, ymax = ci
 f.dmg
 ggsave(f.dmg, file = "09. Forest plot.pdf", width = 4, height = 4, units = "in")
 
+
 # VAFs of differentially mutated genes 
 
 vaf_sh <- maf_sh@data %>%
@@ -189,6 +194,7 @@ vaf.dmg <- ggplot(vaf_df, aes(x = group, y = t_vaf, fill = group)) +
   theme_classic(base_size = 12)
 vaf.dmg 
 ggsave(vaf.dmg, file = "10. DMG VAF.pdf", width = 8, height = 4.5, units = "in") 
+
 
 # ── Copy number segmented analysis ──────────────────────────────────────────── 
 
@@ -216,7 +222,7 @@ vln.hpx <- ggplot(seg_plot, aes(x = category_Hpx, y = segmean, fill = category_H
 vln.hpx
 ggsave(vln.hpx, file = "11. CNA violin plot.pdf", width = 6, height = 8, units = "in")
 
-# Frequency plots 
+# Frequency plots (https://genviz.org/module-03-genvisr/0003/05/01/cnFreq_GenVisR/) 
 
 # seg_data$start <- seg_data$start + 1 
 
@@ -244,84 +250,39 @@ common_samples <- intersect(colnames(cna_data)[-(1:2)], meta_df$patient.orig_ids
 cna_subs <- cna_data[, c("Hugo_Symbol", "Entrez_Gene_Id", common_samples)]
 meta_sub <- meta_df[meta_df$patient.orig_ids %in% common_samples, ] 
 
-results <- data.frame(Gene = cna_subs$Hugo_Symbol, p.value = NA, mean_diff = NA)
+cna_subs <- cna_subs %>% 
+  filter(Hugo_Symbol %in% c("EGFR")) %>% 
+  select(!Entrez_Gene_Id) %>% column_to_rownames(var = "Hugo_Symbol") %>% t() %>% as.data.frame() 
 
-for (i in 1:nrow(cna_subs)) {
-  gene_vals <- as.numeric(cna_subs[i, common_samples])
-  group1 <- gene_vals[meta_sub$hypoxia_class == "Mild_hypoxia"]
-  group2 <- gene_vals[meta_sub$hypoxia_class == "Severe_hypoxia"] 
-  
-  if (length(group1) > 2 && length(group2) > 2) {
-    test <- wilcox.test(group1, group2)
-    results$p.value[i] <- test$p.value
-    results$mean_diff[i] <- mean(group2, na.rm = TRUE) - mean(group1, na.rm = TRUE)
-  }
-}
+cna_subs <- cna_subs %>%
+  mutate(EGFR_CNA_status = ifelse(EGFR == -2, "homozygous_deletion", 
+                           ifelse(EGFR == -1, "hemizygous_deletion", 
+                           ifelse(EGFR == 0, "neutral_no_change", 
+                           ifelse(EGFR == 1, "gain", 
+                           ifelse(EGFR == 2, "high_level_amplification", NA))))))
 
+cna_subs <- cna_subs %>% dplyr::rename(EGFR_GISTIC = "EGFR")
 
-results$adj.p.value <- p.adjust(results$p.value, method = "fdr")
-top_genes <- results[order(results$adj.p.value), ]
+all(rownames(cna_subs) %in% rownames(meta_sub))
+all(rownames(meta_sub) %in% rownames(cna_subs))
 
-head(top_genes, 20)
-
-ggplot(top_genes, aes(x = mean_diff, y = -log10(adj.p.value))) +
-  geom_point(alpha = 0.6) +
-  geom_vline(xintercept = 0, linetype = "dashed") +
-  theme_minimal() +
-  labs(x = "Mean CNA difference (Severe - Mild hypoxia)", y = "-log10(FDR-adjusted p-value)", title = "CNA differences between hypoxia classes")
-
-
-
-cna_data <- cna_data %>% select(!Entrez_Gene_Id) %>% column_to_rownames(var = "Hugo_Symbol") %>% t() %>% as.data.frame() 
-
-
-cna_data <- cna_data %>% rownames_to_column(var = "sample")
-
-cna_plot <- cna_data %>% mutate(category_Hpx = ifelse(sample %in% sh_samp, "Severe_hypoxia", ifelse(sample %in% mh_samp, "Mild_hypoxia", "None")))  
-cna_plot <- cna_plot %>% filter(category_Hpx != "None") 
-
-cna_plot %>% count(category_Hpx)
-
-# Box plots 
-
-box.cna_hpx <- ggplot(cna_plot, aes(x = category_Hpx, y = EGFR, fill = category_Hpx)) + 
-  geom_boxplot(width = 0.75, outlier.shape = NA) +
-  stat_compare_means(aes(label = "p.format"), method = "t.test") +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
-  labs(y = "EGFR copy number association") 
-box.cna_hpx 
-
-ggsave(box.cna_hpx, file = "03. Putative CNA boxplots.pdf", width = 8, height = 4, units = "in")
-
-
-# Bar plots 
-
-bar.cna_hpx <- ggplot(cna_plot, aes(x = category_Hpx, y = EGFR, fill = category_Hpx)) +
-  geom_bar(stat = "summary", fun = "mean", position = "dodge") + 
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
-  labs(y = "EGFR copy number association")
-bar.cna_hpx 
-
-ggsave(bar.cna_hpx, file = "03. Putative CNA barplots.pdf", width = 8, height = 4, units = "in")
-
+cna_subs <- cbind(meta_sub, cna_subs)
+cna_subs %>% group_by(hypoxia_class) %>% count(EGFR_GISTIC)
 
 # Pie charts 
 
 # Value and facet columns treated as characters 
 
-plot_pie <- function(data, group_col = "category_Hpx", value_col = "cna_status", facet_col = NULL) {
+plot_pie <- function(data, group_col = "hypoxia_groups", value_col = "AGE", facet_col = NULL) {
   data[[value_col]] <- as.character(data[[value_col]]) 
   if(!is.null(facet_col)) {
     data[[facet_col]] <- as.character(data[[facet_col]])
-  }
-  
+  } 
   df_sum <- data %>%
     group_by(.data[[group_col]], .data[[value_col]], !!!rlang::syms(facet_col)) %>%
     summarise(n = n(), .groups = "drop") %>%
     group_by(.data[[group_col]], !!!rlang::syms(facet_col)) %>%
-    mutate(perc = n / sum(n) * 100, perc_label = paste0(round(perc, 1), "%"), ypos = cumsum(perc) - perc/2)
+    mutate(perc = n / sum(n) * 100, perc_label = paste0("N=", n, "\n(", round(perc, 1), "%)"), ypos = cumsum(perc) - perc/2)
   
   p_pies <- ggplot(df_sum, aes(x = "", y = perc, fill = .data[[value_col]])) +
     geom_bar(stat = "identity") +
@@ -338,11 +299,50 @@ plot_pie <- function(data, group_col = "category_Hpx", value_col = "cna_status",
   return(p_pies)
 } 
 
-pie.cna_hpx <- plot_pie(cna_plot, group_col = "category_Hpx", value_col = "EGFR")
+pie.cna_egfr <- plot_pie(cna_subs, group_col = "hypoxia_class", value_col = "EGFR_CNA_status")
+pie.cna_egfr
+ggsave(pie.cna_egfr, file = "13. EGFR CNA metapie.pdf", width = 14, height = 10, units = "in")
 
-pie.cna_com <- pie.cna_hpx
-pie.cna_com 
-ggsave(pie.cna_com, file = "03. Putative CNA piecharts.pdf", width = 8, height = 4, units = "in")
+# Add pathway enrichment result 
+
+res_path <- read.csv("Result ssGSEA (MPs-QAD-Progeny).csv", row.names = 1)
+res_path <- res_path %>% select(EGFR_50, EGFR_all)
+cna_subs <- cbind(cna_subs, res_path)
+
+# Categories with too few observations were excluded to support reliable cox modeling 
+
+cna_subs %>% dplyr::count(EGFR_CNA_status)
+cna_filt <- cna_subs %>% dplyr::filter(EGFR_CNA_status %in% c('gain', 'neutral_no_change'))
+
+# Cox total 
+
+surv.obj_cna <- Surv(time = cna_filt$OS_MONTHS, event = cna_filt$OS_STATUS)
+
+cox_cna <- coxph(surv.obj_cna ~ hypoxia_class + EGFR_CNA_status + EGFR_all, data = cna_filt)
+for_cna <- ggforest(cox_cna, data = cna_filt) 
+for_cna 
+ggsave(file = "14. Cox regression EGFR CNA (Total).pdf", plot = for_cna, width = 6, height = 4, units = "in") 
+
+# Cox separate 
+
+sh_m.cna <- cna_filt %>% filter(hypoxia_class == "Severe_hypoxia") 
+mh_m.cna <- cna_filt %>% filter(hypoxia_class == "Mild_hypoxia") 
+
+sh_m.cna$EGFR_CNA_status <- relevel(factor(sh_m.cna$EGFR_CNA_status), ref = "neutral_no_change")
+mh_m.cna$EGFR_CNA_status <- relevel(factor(mh_m.cna$EGFR_CNA_status), ref = "neutral_no_change")
+
+surv.obj_sh.cna <- Surv(time = sh_m.cna$OS_MONTHS, event = sh_m.cna$OS_STATUS)
+surv.obj_mh.cna <- Surv(time = mh_m.cna$OS_MONTHS, event = mh_m.cna$OS_STATUS)
+
+cox_sh.cna <- coxph(surv.obj_sh.cna ~ EGFR_CNA_status + EGFR_50 + EGFR_all, data = sh_m.cna)
+for_sh.cna <- ggforest(cox_sh.cna, data = sh_m.cna) 
+for_sh.cna 
+ggsave(file = "14. Cox regression EGFR CNA (SH).pdf", plot = for_sh.cna, width = 6, height = 4, units = "in") 
+
+cox_mh.cna <- coxph(surv.obj_mh.cna ~ EGFR_CNA_status + EGFR_50 + EGFR_all, data = mh_m.cna)
+for_mh.cna <- ggforest(cox_mh.cna, data = mh_m.cna) 
+for_mh.cna 
+ggsave(file = "14. Cox regression EGFR CNA (MH).pdf", plot = for_mh.cna, width = 6, height = 4, units = "in") 
 
 # ── Putative arm-level copy number analysis ─────────────────────────────────── 
 
@@ -358,115 +358,21 @@ cna.arm_long <- cna_arms %>% pivot_longer(cols = starts_with("TCGA"), names_to =
 cna.arm_long <- cna.arm_long %>% mutate(category_Hpx = ifelse(sample %in% sh_samp, "Severe_hypoxia", ifelse(sample %in% mh_samp, "Mild_hypoxia", "None")))  
 cna.arm_long <- cna.arm_long %>% filter(category_Hpx != "None") %>% na.omit() 
 
-colnames(cna.arm_long)
-str(cna.arm_long)
-
-pie1.arm_hpx <- plot_pie(cna.arm_long, group_col = "category_Hpx", value_col = "cna_status")
-
-pie2.arm_hpx <- plot_pie(cna.arm_long, group_col = "category_Hpx", value_col = "ENTITY_STABLE_ID")
-
-pie.arm_com <- pie1.arm_hpx + pie2.arm_hpx 
-pie.arm_com 
-ggsave(pie.arm_com, file = "Putative arm-level CNA piecharts.pdf", width = 12, height = 8, units = "in")
-
-cna_summary <- cna.arm_long %>%
+cna_summmary <- cna.arm_long %>%
   group_by(NAME, category_Hpx, cna_status) %>%
   summarise(count = n(), .groups = "drop")
 
-cna_summary <- cna_summary %>%
+cna_summmary <- cna_summmary %>%
   group_by(NAME, category_Hpx) %>%
   mutate(percent = 100 * count / sum(count)) %>%
   ungroup()
 
-ggplot(cna_summary, aes(x = "", y = percent, fill = cna_status)) +
+pie.arm_com <- ggplot(cna_summmary, aes(x = "", y = percent, fill = cna_status)) +
   geom_bar(stat = "identity", width = 1, color = "white") +
   coord_polar(theta = "y") +
   facet_grid(NAME ~ category_Hpx, scales = "free_y") +
   scale_fill_manual(values = c("Loss" = "forestgreen", "Gain" = "red", "Unchanged" = "grey80")) +
   theme_void() +
   theme(strip.text = element_text(size = 10, face = "bold"), legend.position = "bottom") 
-
-# ── Metadata plots for supplementary ────────────────────────────────────────── 
-
-metadata <- read.csv("LGG_HP_metaclus.csv") 
-meta.res <- metadata %>% rename(PATIENT_ID = "X")
-meta.res <- meta.res %>% mutate(category_mut = ifelse(PATIENT_ID %in% mut_sh_cha, "Mut.SH_C1", ifelse(PATIENT_ID %in% wld_sh_cha, "Wild.SH_C1", ifelse(PATIENT_ID %in% mh_cha, "MH_C2", "None")))) 
-
-meta.res <- meta.res %>% select(PATIENT_ID, SUBTYPE, CANCER_TYPE_DETAILED, GRADE, AGE, Cluster_groups, category_mut)
-colnames(meta.res)
-
-meta.res <- meta.res %>% filter(category_mut != "None")
-
-# Color palettes  
-
-gradient_colors <- list(AGE = c("white", "lightgreen", "darkgreen"))
-
-category_colors <- list(SUBTYPE = c("LGG_IDHmut-codel" = "tomato", "LGG_IDHmut-non-codel" = "gold", "LGG_IDHwt" = "deepskyblue", "None" = "grey70"),
-                        CANCER_TYPE_DETAILED = c("Astrocytoma" = "forestgreen", "Low-Grade Glioma (NOS)" = "orange", "Oligoastrocytoma" = "red", "Oligodendroglioma" = "purple"),
-                        GRADE = c("G2" = "darkblue", "G3" = "darkred", "NA" = "grey70"), 
-                        Cluster_groups = c("C1" = "green", "C2" = "#00BFC4"), 
-                        category_mut = c("MH_C2" = "green", "None" = "grey70", "Mut.SH_C1" = "#FF2DF1", "Wild.SH_C1" = "#FA812F")) 
-
-# Functions for plots 
-
-plot_numeric <- function(varname, colors) {
-  ggplot(meta.res, aes(x = PATIENT_ID, y = 1, fill = .data[[varname]])) +
-    geom_tile() +
-    scale_fill_gradientn(colors = colors) +
-    theme_void() +
-    theme(legend.position = "bottom", plot.margin = margin(0, 5, 0, 5)) +
-    labs(fill = varname)
-}
-
-plot_categorical <- function(varname, colors) {
-  ggplot(meta.res, aes(x = PATIENT_ID, y = 1, fill = .data[[varname]])) +
-    geom_tile() +
-    scale_fill_manual(values = colors) +
-    theme_void() +
-    theme(legend.position = "bottom", plot.margin = margin(0, 5, 0, 5)) +
-    labs(fill = varname)
-}
-
-meta.res <- meta.res %>%
-  mutate(category_mut = factor(category_mut, levels = c("Mut.SH_C1", "Wild.SH_C1", "MH_C2", "None"))) %>%
-  arrange(category_mut, SUBTYPE, GRADE) %>% 
-  mutate(PATIENT_ID = factor(PATIENT_ID, levels = unique(PATIENT_ID)))
-
-# Plot bar plot as the base 
-
-p_meta.lgg <- ggplot(meta.res, aes(x = PATIENT_ID, y = AGE, fill = Cluster_groups)) +
-  geom_bar(stat = "identity") +
-  geom_hline(yintercept = quantile(meta.res$AGE, 0.5, na.rm = TRUE), linetype = "dashed", color = "red", size = 0.8) +
-  facet_grid(. ~ category_mut, scales = "free_x", space = "free_x") +
-  theme_bw() +
-  theme(axis.text.x = element_blank(),
-        axis.title.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        plot.margin = margin(5, 5, 2, 5)) 
-
-# Combine the annotation plots
-
-num_vars <- names(gradient_colors)
-cat_vars <- names(category_colors)
-
-num_plots <- mapply(plot_numeric, varname = num_vars, colors = gradient_colors, SIMPLIFY = FALSE) 
-cat_plots <- mapply(plot_categorical, varname = cat_vars, colors = category_colors, SIMPLIFY = FALSE) 
-all_plots <- list(p_meta.lgg) %>% append(cat_plots) %>% append(num_plots)
-
-rel_height <- c(4, rep(1, length(cat_plots) + length(num_plots)))
-p_combined <- wrap_plots(all_plots, ncol = 1, heights = rel_height)
-
-f.plot <- print(p_combined)
-ggsave(f.plot, file = "05. Metadata annotation plots.pdf", width = 8, height = 6, units = "in")
-
-# Pie charts 
-
-pie.mut <- plot_pie(meta.res, group_col = "Cluster_groups", value_col = "category_mut")
-pie.grd <- plot_pie(meta.res, group_col = "Cluster_groups", value_col = "GRADE")
-pie.sub <- plot_pie(meta.res, group_col = "Cluster_groups", value_col = "SUBTYPE")
-pie.typ <- plot_pie(meta.res, group_col = "Cluster_groups", value_col = "CANCER_TYPE_DETAILED")
-
-pie.meta.supp <- pie.mut + pie.grd + pie.sub + pie.typ 
-pie.meta.supp 
-ggsave(pie.meta.supp, file = "06. Metadata percentage pie.pdf", width = 12, height = 8, units = "in")
-
+pie.arm_com
+ggsave(pie.arm_com, file = "15. Putative arm-level CNA piecharts.pdf", width = 10, height = 60, units = "in", limitsize = FALSE)

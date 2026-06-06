@@ -1,4 +1,4 @@
-# Author : Depro Das, 3DBM Lab, Department of Neurosurgery, University Medical Center Freiburg, Freiburg, Germany
+# Author : Depro Das, Department of Neurosurgery, University Medical Center Freiburg, Freiburg, Germany
 
 # ── Libraries ───────────────────────────────────────────────────────────────── 
 
@@ -32,6 +32,35 @@ metadata <- metadata %>%
   filter(SUBTYPE %in% c("LGG_IDHmut-non-codel", "LGG_IDHmut-codel")) %>% 
   mutate(IDH_mut = "IDH_mut") 
 
+# Treatment information 
+
+treatment <- read.csv("data_timeline_treatment.csv")
+
+treatment <- treatment %>% 
+  group_by(PATIENT_ID) %>%
+  summarise(TREATMENT_TYPE = paste(unique(TREATMENT_TYPE), collapse = "_"))
+
+treatment <- treatment %>% filter(treatment$PATIENT_ID %in% rownames(metadata))
+treatment %>% dplyr::count(TREATMENT_TYPE) %>% print(n = 25)
+
+small_trt <- treatment %>%
+  dplyr::count(TREATMENT_TYPE) %>% 
+  filter(n < 10) %>% pull(TREATMENT_TYPE)
+
+treatment <- treatment %>%
+  mutate(TREATMENT_new = ifelse(TREATMENT_TYPE %in% small_trt, "Other treatments", TREATMENT_TYPE))
+
+treatment %>%
+  dplyr::count(TREATMENT_new)
+
+metadata <- metadata %>%
+  rownames_to_column(var = 'PATIENT_ID') %>% 
+  left_join(treatment, by = "PATIENT_ID") %>%
+  mutate(TREATMENT_new = ifelse(is.na(TREATMENT_new), "not_available", TREATMENT_new)) %>% 
+  column_to_rownames(var = 'PATIENT_ID') 
+
+write.csv(metadata, file = "IDHm_metadata.csv")
+
 # Count data fix names (only IDH-mutant), survival data was added at the last 2 columns (just to make data handling with the script a bit easier) 
 
 t.counts <- read.csv("IDHm_primary_data.csv", row.names = 1) 
@@ -47,7 +76,6 @@ all(rownames(t.counts) %in% rownames(metadata))
 all(rownames(metadata) %in% rownames(t.counts))
 
 counts.raw <- t.counts %>% select(-OS, -OS.time) %>% t() 
-write.csv(counts.raw, file = "TCGA-PanCan IDHm-glioma raw-count.csv") 
 
 # Count data normalize
 
@@ -235,11 +263,9 @@ corr_matrx_adj <- corr_matrx
 corr_matrx_adj[clust1_samples, clust2_samples] <- corr_matrx_adj[clust1_samples, clust2_samples] - 0.05
 corr_matrx_adj[clust2_samples, clust1_samples] <- corr_matrx_adj[clust2_samples, clust1_samples] - 0.05  # keep symmetry
 
-
 clust2_samples <- names(final_clusters[final_clusters == 2])
 corr_matrx_adj[clust2_samples, clust2_samples] <- corr_matrx_adj[clust2_samples, clust2_samples] + 0.05
 corr_matrx_adj[corr_matrx_adj > 1] <- 1
-
 
 # Plot heatmap 
 
@@ -298,13 +324,13 @@ plot_pie <- function(data, group_col = "hypoxia_groups", value_col = "AGE", face
   data[[value_col]] <- as.character(data[[value_col]]) 
   if(!is.null(facet_col)) {
     data[[facet_col]] <- as.character(data[[facet_col]])
-  }
+  } 
   
   df_sum <- data %>%
     group_by(.data[[group_col]], .data[[value_col]], !!!rlang::syms(facet_col)) %>%
     summarise(n = n(), .groups = "drop") %>%
     group_by(.data[[group_col]], !!!rlang::syms(facet_col)) %>%
-    mutate(perc = n / sum(n) * 100, perc_label = paste0(round(perc, 1), "%"), ypos = cumsum(perc) - perc/2)
+    mutate(perc = n / sum(n) * 100, perc_label = paste0("N=", n, "\n(", round(perc, 1), "%)"), ypos = cumsum(perc) - perc/2)
   
   p_pies <- ggplot(df_sum, aes(x = "", y = perc, fill = .data[[value_col]])) +
     geom_bar(stat = "identity") +
@@ -324,19 +350,27 @@ plot_pie <- function(data, group_col = "hypoxia_groups", value_col = "AGE", face
 pie.hpx_gend <- plot_pie(metadata, group_col = "hypoxia_groups", value_col = "SEX")
 pie.hpx_grad <- plot_pie(metadata, group_col = "hypoxia_groups", value_col = "GRADE")
 pie.hpx_subt <- plot_pie(metadata, group_col = "hypoxia_groups", value_col = "SUBTYPE")
+pie.hpx_tret <- plot_pie(metadata, group_col = "hypoxia_groups", value_col = "TREATMENT_new")
 pie.hpx_path <- plot_pie(metadata, group_col = "hypoxia_groups", value_col = "CANCER_TYPE_DETAILED")
 
-pie.hpx_com <- (pie.hpx_gend + pie.hpx_grad) / (pie.hpx_subt + pie.hpx_path) 
+pie.hpx_com <- (pie.hpx_gend + pie.hpx_grad) / (pie.hpx_subt + pie.hpx_path) / pie.hpx_tret
 pie.hpx_com 
-ggsave(pie.hpx_com, file = "05. Hypoxia group metapie.pdf", width = 8, height = 6, units = "in")
+ggsave(pie.hpx_com, file = "05. Hypoxia group metapie.pdf", width = 14, height = 10, units = "in")
 
+# Focusing on other treatment groups
+
+other_treat <- metadata %>% dplyr::filter(TREATMENT_new %in% c("Other treatments"))
+
+pie.oth_trt <- plot_pie(other_treat, group_col = "hypoxia_groups", value_col = "TREATMENT_TYPE")
+pie.oth_trt
+ggsave(pie.oth_trt, file = "05. Hypoxia group Other treatment pie.pdf", width = 14, height = 10, units = "in")
 
 # ── Confirmatory enrichment ───────────────────────────────────────────────────  
 
 # Prepare inputs 
 
 counts.normz <- t.counts %>% select(-OS, -OS.time) %>% t() 
-write.csv(counts.normz, file = "TCGA-PanCan IDHm-glioma norm-count.csv") 
+write.csv(counts.normz, file = "TCGA-PanCan IDHm-glioma norm-count.csv")
 
 any(is.na(counts.normz)) 
 counts.normz <- counts.normz %>%
@@ -394,12 +428,11 @@ ht.hpx <- Heatmap(as.matrix(t(res_hpx_only)),
                   border = TRUE) 
 ht.hpx <- as.ggplot(ht.hpx) 
 ht.hpx 
-ggsave(ht.hpx, filename = "6. Heatmap hypoxia.pdf", width = 8, height = 2, units = c("in"))
+# ggsave(ht.hpx, filename = "6. Heatmap hypoxia.pdf", width = 8, height = 2, units = c("in"))
 
 # Rename the groups 
 
 metadata <- metadata %>% mutate(hypoxia_class = ifelse(hypoxia_groups %in% "C1", "Mild_hypoxia", "Severe_hypoxia"))
-
 
 # ── Association with MPs ──────────────────────────────────────────────────────   
 
@@ -416,7 +449,6 @@ p.box <- ggplot(res_ssgsea, aes(x = source, y = score, fill = SUBTYPE_GRADE)) +
 p.box
 ggsave(p.box, filename = "7. Metaprograms boxplot.pdf", width = 4, height = 5, units = c("in"))
 
-
 # Enrichment 
 
 set.seed(123) 
@@ -430,7 +462,7 @@ ht.subtype <- Heatmap(as.matrix(t(res_long)),
                       border = TRUE) 
 ht.subtype <- as.ggplot(ht.subtype) 
 ht.subtype 
-# ggsave(ht.subtype, filename = "7. Metaprograms heatmap.pdf", width = 8, height = 4, units = c("in"))
+ggsave(ht.subtype, filename = "7. Metaprograms heatmap.pdf", width = 8, height = 4, units = c("in"))
 
 # Enrichment - average (4 groups)
 
@@ -455,7 +487,6 @@ p.enr.dot <- ggplot(mps_summm, aes(x = hypoxia_class, y = Metaprogram, fill = En
 p.enr.dot
 ggsave(p.enr.dot, filename = "7. Metaprograms dotplot.pdf", width = 6, height = 3, units = c("in"))
 
-
 # Correlation between hypoxia and metaprograms (4 groups) 
 
 enrich_df <- cbind(res_long, metadata) 
@@ -479,7 +510,7 @@ ggsave(file = "7. Metaprograms correlation (4 categories).pdf", plot = p.cor.dot
 # ── Survival and cox analysis ───────────────────────────────────────────────── 
 
 metasurv <- cbind(res_hpx_only, metadata)
-metasurv <- metasurv[complete.cases(metasurv[, c('OS_MONTHS', 'OS_STATUS', 'hypoxia_class', 'SUBTYPE_GRADE')]), ]
+metasurv <- metasurv[complete.cases(metasurv[, c('OS_MONTHS', 'OS_STATUS', 'hypoxia_class', 'SUBTYPE_GRADE', 'TREATMENT_new')]), ]
 
 # Univariate survival / overall
 
@@ -553,14 +584,14 @@ kmp.surv.ptg <- ggsurvplot_facet(fit.surv_ptg,
 kmp.surv.ptg 
 ggsave(file = "8. Survival hypoxia groups (pathology & grade in hypoxia).pdf", plot = kmp.surv.ptg, width = 12, height = 4, units = "in") 
 
-# Multivariable cox regression (interaction tests to prove irrespective statistically)
+# Multivariable cox regression 
 
 surv.obj_hpx <- Surv(time = metasurv$OS_MONTHS, event = metasurv$OS_STATUS)
 
-cox_int <- coxph(surv.obj_hpx ~ hypoxia_class * GRADE + hypoxia_class * SUBTYPE, data = metasurv)
-for_int <- ggforest(cox_int, data = metasurv)
-ggsave(file = "8. Cox regression.pdf", plot = for_int, width = 6, height = 2.5, units = "in") 
-
+cox_nrm <- coxph(surv.obj_hpx ~ hypoxia_class + GRADE + SUBTYPE + TREATMENT_new, data = metasurv)
+for_nrm <- ggforest(cox_nrm, data = metasurv) 
+for_nrm 
+ggsave(file = "8. Cox regression-norm.pdf", plot = for_int, width = 6, height = 2.5, units = "in") 
 
 # ── ESTIMATE ────────────────────────────────────────────────────────────────── 
 
@@ -590,12 +621,11 @@ box_estim <- ggplot(estimm_long, aes(x = hypoxia_class, y = scores, fill = SUBTY
 box_estim
 ggsave(filename = "9. Estimate hypoxia groups bar (4 class).pdf", plot = box_estim, width = 8, height = 3, units = c("in")) 
 
-
 # ── Immune checkpoint gene expression (ICGs) ────────────────────────────────── 
 
 colnames(metadata)
 
-icg_vec <- c("CCR5", "CD274", "CTLA4", "CXCR3", "HAVCR2", "LAG3", "PDCD1", "PDCD1LG2", "SIGLEC15", "TIGIT") 
+icg_vec <- c('CCR5', 'CD274', 'CTLA4', 'CXCR3', 'HAVCR2', 'LAG3', 'PDCD1', 'PDCD1LG2', 'SIGLEC15', 'TIGIT') 
 
 counts.icg <- counts.normz %>% as.data.frame() %>% dplyr::filter(rownames(.) %in% icg_vec)
 counts.icg <- t(counts.icg) 
@@ -615,4 +645,3 @@ box_icg <- ggplot(counts.icg.long, aes(x = hypoxia_class, y = normalized_express
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) 
 box_icg
 ggsave(filename = "10. ICG hypoxia groups box (4 class).pdf", plot = box_icg, width = 10, height = 4, units = c("in")) 
-
