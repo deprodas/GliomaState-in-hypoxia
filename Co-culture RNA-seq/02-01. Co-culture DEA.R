@@ -1,4 +1,4 @@
-# Author : Depro Das, 3DBM Lab, Department of Neurosurgery, University Medical Center Freiburg, Freiburg, Germany
+# Author : Depro Das, Department of Neurosurgery, University Medical Center Freiburg, Freiburg, Germany
 
 # ── Libraries ───────────────────────────────────────────────────────────────── 
 
@@ -200,4 +200,3 @@ bub_all <- ggplot(H_merged, aes(x = condition, y = ID, color = NES, size = minus
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 bub_all
 ggsave(filename = "2. All Hallmark pathways.pdf", plot = bub_all, width = 7, height = 12, units = c("in")) 
-
