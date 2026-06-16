@@ -1,4 +1,4 @@
-# Author : Depro Das, 3DBM Lab, Department of Neurosurgery, University Medical Center Freiburg, Freiburg, Germany
+# Author : Depro Das, Department of Neurosurgery, University Medical Center Freiburg, Freiburg, Germany
 
 # ── Libraries ───────────────────────────────────────────────────────────────── 
 
