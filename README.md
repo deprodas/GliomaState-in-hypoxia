@@ -9,5 +9,5 @@ _**Depro Das**_ <br/>
 *Clinical Cooperation Unit Neuropathology, German Cancer Research Center (DKFZ), Heidelberg, Germany*<br/> 
 *Formerly: Department of Neurosurgery, University Hospital Freiburg, Freiburg, Germany*<br/>
 
-*Email: depro.das@uniklinik-freiburg.de , depro.das@dkfz-heidelberg.de* 
+*Email: depro.das@dkfz-heidelberg.de* 
 
