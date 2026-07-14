@@ -122,12 +122,6 @@ merged_seurat <- NormalizeData(merged_seurat, verbose = FALSE)
 
 saveRDS(merged_seurat, file = "LGG_merged_10xSeurat.RDS")
 
-
-# Check plots 
-
-SpatialFeaturePlot(merged_seurat, features = "EEF2")
-
-
 # Join layers together
 
 merged_seurat <- JoinLayers(merged_seurat, assay = "Spatial")
@@ -136,15 +130,6 @@ merged_seurat <- JoinLayers(merged_seurat, assay = "Spatial")
 
 spatial_counts <- merged_seurat@assays$Spatial$counts 
 spatial_counts <- as.data.frame(spatial_counts)
-
-# SCT normalized counts
-
-sct_matrix <- GetAssayData(merged_seurat, assay = "SCT", slot = "data")
-
-# Log-normalized expression
-
-normalized_matrix <- GetAssayData(merged_seurat, assay = "Spatial", slot = "data")
-
 
 # ── Spatial region classification ─────────────────────────────────────────────
 
