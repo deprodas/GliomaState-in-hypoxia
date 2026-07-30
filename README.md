@@ -1,7 +1,7 @@
 # Spatially restricted niches support hypoxia-associated transcriptional plasticity contributing to IDH-mutant glioma progression 
 
 **Description of the Repository** <br/> 
-This repository contains the computational workflows supporting Das et al., 2026, *“Spatially confined niches support hypoxia-associated transcriptional plasticity contributing to malignant progression in IDH-mutant gliomas.”* The analyses include bulk and single-cell transcriptomics, spatial transcriptomics, co-culture experiments, DNA methylation, and genomic alterations. 
+This repository contains the computational workflows supporting Das et al., 2026, *“Spatially restricted niches support hypoxia-associated transcriptional plasticity contributing to IDH-mutant glioma progression.”* The analyses include bulk and single-cell transcriptomics, spatial transcriptomics, co-culture experiments, DNA methylation, and genomic alterations. 
 
 ### Author 
 _**Depro Das**_ <br/> 
